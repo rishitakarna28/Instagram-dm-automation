@@ -1,9 +1,5 @@
 # FAILURES.md — System Edge Cases & Failure Modes
 
-An honest assessment of the known conditions under which this system can lose a DM, send a duplicate, or report an inaccurate statistic.
-
----
-
 ### 1. Webhook Accepted but Process Crashes Before SQLite Transaction
 - **Condition:** An incoming webhook hits `POST /webhook`, returns `200 OK` immediately, but the server crashes (e.g., SIGKILL or out-of-memory) during the few milliseconds before the async event loop writes the event to SQLite.
 - **Impact:** That specific comment event is lost and no DM will be queued.
@@ -34,6 +30,3 @@ An honest assessment of the known conditions under which this system can lose a 
 
 ---
 
-### 5. Clock Drift / NTP Skew During Rolling Rate-Limit Window
-- **Condition:** If the system clock is adjusted backward by NTP synchronization while requests are queued.
-- **Impact:** `Date.now()` calculations could briefly misjudge the rate-limiting cooldown period, either causing unnecessary delays or firing a request slightly ahead of schedule.
