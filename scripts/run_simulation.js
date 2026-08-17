@@ -27,19 +27,26 @@ async function main() {
     process.exit(1);
   }
 
-  const webhookUrl =
+  let webhookUrl =
     process.argv[2] ||
-    (await prompt('Enter your public webhook URL (e.g. https://your-domain.ngrok-free.app/webhook): '));
-
-  const count = parseInt(process.argv[3] || (await prompt('Number of events to simulate (e.g. 50 or 500) [50]: ')) || '50', 10);
-  const duration = parseInt(process.argv[4] || (await prompt('Duration in seconds [10]: ')) || '10', 10);
+    (await prompt('Enter your deployed URL (e.g. https://instagram-dm-automation-ty32.onrender.com): '));
 
   if (!webhookUrl) {
-    console.error('Error: Webhook URL is required.');
+    console.error('Error: URL is required.');
     process.exit(1);
   }
 
-  console.log(`\n🚀 Starting simulation with ${count} events over ${duration}s to: ${webhookUrl}`);
+  // Auto-clean URL and ensure it points to /webhook
+  webhookUrl = webhookUrl.replace(/\/+$/, '');
+  if (!webhookUrl.endsWith('/webhook')) {
+    webhookUrl += '/webhook';
+  }
+
+  const baseUrl = webhookUrl.replace(/\/webhook$/, '');
+  const count = parseInt(process.argv[3] || (await prompt('Number of events to simulate (e.g. 50 or 500) [50]: ')) || '50', 10);
+  const duration = parseInt(process.argv[4] || (await prompt('Duration in seconds [10]: ')) || '10', 10);
+
+  console.log(`\n🚀 Starting simulation with ${count} events over ${duration}s to:\n   👉 ${webhookUrl}`);
 
   try {
     const res = await fetch(`${BASE_URL}/v1/simulate/start`, {
@@ -64,23 +71,45 @@ async function main() {
     const data = await res.json();
     console.log('\n✅ Simulation started successfully!');
     console.log('Run ID:', data.run_id);
-    console.log('\nFetching truth data...');
+    console.log(`\nStreaming ${count} events... Waiting for simulation to finish...`);
 
-    // Wait for simulation duration + extra buffer
-    console.log(`Waiting ${duration + 5} seconds for simulation events to stream...`);
-    await new Promise((r) => setTimeout(r, (duration + 5) * 1000));
+    // Poll truth endpoint until status === "complete"
+    let truthData = null;
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const truthRes = await fetch(`${BASE_URL}/v1/simulate/${data.run_id}/truth`, {
+        headers: { 'X-API-Key': API_KEY },
+      });
 
-    const truthRes = await fetch(`${BASE_URL}/v1/simulate/${data.run_id}/truth`, {
-      headers: { 'X-API-Key': API_KEY },
-    });
-
-    if (truthRes.ok) {
-      const truthData = await truthRes.json();
-      console.log('\n📊 Truth Data Summary:');
-      console.log(JSON.stringify(truthData, null, 2));
-    } else {
-      console.warn('Could not fetch truth data yet:', await truthRes.text());
+      if (truthRes.ok) {
+        truthData = await truthRes.json();
+        if (truthData.status === 'complete') {
+          break;
+        }
+      }
     }
+
+    console.log('\n========================================');
+    console.log('📊 SIMULATION TRUTH REPORT');
+    console.log('========================================');
+    console.log(`Total Events Sent by Mock API:   ${truthData?.total_events_generated || count}`);
+    console.log(`Webhook Deliveries (inc. retries): ${truthData?.total_deliveries_attempted || '—'}`);
+    console.log(`Webhook 200 OK Received by Mock:  ${truthData?.webhook_200_count || 0}`);
+    console.log(`Expected Unique Matching Users:   ${truthData?.expected_unique_recipient_count || 0}`);
+
+    // Fetch live stats from deployed app
+    try {
+      const statsRes = await fetch(`${baseUrl}/stats`);
+      if (statsRes.ok) {
+        const liveStats = await statsRes.json();
+        console.log('\n📈 YOUR LIVE /stats COUNTERS ON RENDER:');
+        console.log(JSON.stringify(liveStats, null, 2));
+      }
+    } catch {
+      // ignore
+    }
+
+    console.log('\n✅ Simulation verification complete!');
   } catch (err) {
     console.error('Error running simulation:', err.message);
   }

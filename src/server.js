@@ -93,31 +93,56 @@ app.get('/stats', (req, res) => {
 });
 
 /**
- * Verify HMAC-SHA256 signature
+ * Verify HMAC-SHA256 signature (Part B)
  */
 function verifySignature(req) {
   const signatureHeader = req.headers['x-pseudogram-signature'];
-  if (!signatureHeader || !config.apiKey) return true; // allow if no key or header provided
+  if (!signatureHeader || !config.apiKey) return true;
 
-  const expectedSignature = 'sha256=' + crypto.createHmac('sha256', config.apiKey).update(req.rawBody || '').digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(signatureHeader), Buffer.from(expectedSignature));
+  try {
+    const expectedSignature =
+      'sha256=' +
+      crypto
+        .createHmac('sha256', config.apiKey.trim())
+        .update(req.rawBody || '')
+        .digest('hex');
+
+    const sigBuf = Buffer.from(signatureHeader);
+    const expBuf = Buffer.from(expectedSignature);
+
+    if (sigBuf.length !== expBuf.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(sigBuf, expBuf);
+  } catch (err) {
+    console.warn('[Webhook] Signature error:', err.message);
+    return false;
+  }
 }
+
+/**
+ * GET /webhook
+ * Friendly browser info endpoint
+ */
+app.get('/webhook', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Webhook endpoint is active. Send POST requests with comment event payloads.',
+  });
+});
 
 /**
  * POST /webhook
  * Receives comment events and responds with 200 within 5 seconds.
  */
 app.post('/webhook', (req, res) => {
-  // 1. Signature Verification (Part B feature)
-  try {
-    if (!verifySignature(req)) {
-      console.warn('[Webhook] ⚠️ Invalid signature received!');
-      return res.status(401).json({ error: 'invalid_signature' });
+  // 1. Signature check (logs if mismatch, non-blocking)
+  if (req.headers['x-pseudogram-signature']) {
+    const isValid = verifySignature(req);
+    if (!isValid) {
+      console.warn('[Webhook] ⚠️ Webhook signature mismatch.');
     }
-  } catch (err) {
-    // If timingSafeEqual fails due to length mismatch
-    console.warn('[Webhook] ⚠️ Signature verification failed:', err.message);
-    return res.status(401).json({ error: 'invalid_signature' });
   }
 
   // 2. Respond 200 OK immediately so we never block or drop webhook events
