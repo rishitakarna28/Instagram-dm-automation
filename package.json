@@ -1,0 +1,30 @@
+{
+  "name": "instagram-dm-automation",
+  "version": "1.0.0",
+  "description": "Instagram Comment-to-DM Automation backend for LinkPlease assignment",
+  "main": "src/server.js",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "apply": "node scripts/apply_key.js",
+    "clean-db": "node scripts/reset_db.js",
+    "test-flow": "node scripts/test_flow.js",
+    "simulate": "node scripts/run_simulation.js"
+  },
+  "keywords": [
+    "instagram",
+    "webhook",
+    "automation",
+    "dm"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
